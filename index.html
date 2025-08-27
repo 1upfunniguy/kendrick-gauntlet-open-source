@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kendrick Gauntlet</title>
+  <link rel="icon" href="./images.png" type="image/png">
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: sans-serif;
+      margin: 50px;
+      background-color: black;
+      color: white;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px;
+      cursor: pointer;
+      color: initial;
+    }
+    #guessContainer {
+      margin-top: 20px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+    #guessInput {
+      padding: 5px;
+      font-size: 16px;
+    }
+    #sliderContainer {
+      margin: 15px 0;
+      text-align: center;
+    }
+    input[type=range] {
+      width: 200px;
+    }
+  </style>
+</head>
+<body>
+
+  <button id="playButton">Play</button>
+
+  <div id="sliderContainer">
+    <label for="timeSlider">Seconds before guessing: <span id="timeLabel">30</span>s</label><br>
+    <input type="range" id="timeSlider" min="1" max="60" step="1" value="30">
+  </div>
+
+  <div id="audioContainer"></div>
+
+  <div id="guessContainer">
+    <input type="text" id="guessInput" placeholder="Guess the song title">
+    <button id="submitGuess">Submit</button>
+    <button id="revealButton">Reveal</button>
+    <p id="feedback"></p>
+  </div>
+
+  <script>
+    const apiKey = "YOUR_API_KEY";
+    const playlistId = "PLyzmjCamdzMVL2wwjMZp0suT4CoK6FXGN";
+    let videos = [];
+    let currentVideo = null;
+    let audioTimer = null;
+    let waitTime = 30;
+
+    const timeSlider = document.getElementById("timeSlider");
+    const timeLabel = document.getElementById("timeLabel");
+
+    timeSlider.addEventListener("input", () => {
+      waitTime = parseInt(timeSlider.value, 10);
+      timeLabel.innerText = waitTime;
+    });
+
+    async function fetchAllReleases() {
+      let pageToken = "";
+      videos = [];
+
+      try {
+        do {
+          const url = `https://www.googleapis.com/youtube/v3/playlistItems?key=${apiKey}&playlistId=${playlistId}&part=snippet&maxResults=50&pageToken=${pageToken}`;
+          const response = await fetch(url);
+          const data = await response.json();
+
+          const newVideos = data.items.map(item => ({
+            id: item.snippet.resourceId.videoId,
+            title: item.snippet.title.toLowerCase()
+          }));
+
+          videos = videos.concat(newVideos);
+          pageToken = data.nextPageToken || "";
+        } while (pageToken);
+      } catch (err) {
+        console.error("Error fetching releases:", err);
+      }
+    }
+
+    async function playRandomAudio() {
+      if (videos.length === 0) await fetchAllReleases();
+      if (videos.length === 0) return;
+
+      const randomIndex = Math.floor(Math.random() * videos.length);
+      currentVideo = videos[randomIndex];
+
+      const audioContainer = document.getElementById("audioContainer");
+      audioContainer.innerHTML = `
+        <iframe src="https://www.youtube-nocookie.com/embed/${currentVideo.id}?autoplay=1&controls=0&modestbranding=1&rel=0&disablekb=1&showinfo=0"
+          style="display:none;" allow="autoplay; encrypted-media"></iframe>
+      `;
+
+      document.getElementById("guessContainer").style.display = "none";
+      document.getElementById("feedback").innerText = "";
+      document.getElementById("guessInput").value = "";
+
+      clearTimeout(audioTimer);
+      audioTimer = setTimeout(() => {
+        audioContainer.innerHTML = "";
+        document.getElementById("guessContainer").style.display = "flex";
+        document.getElementById("guessInput").focus();
+      }, waitTime * 1000);
+    }
+
+    function checkGuess() {
+      const guess = document.getElementById("guessInput").value.toLowerCase().trim();
+      if (currentVideo.title.includes(guess) && guess.length > 0) {
+        document.getElementById("feedback").innerText = "✅ Correct! Loading next audio...";
+        setTimeout(playRandomAudio, 1500);
+      } else {
+        document.getElementById("feedback").innerText = "❌ Incorrect, try again!";
+      }
+    }
+
+    document.getElementById("playButton").addEventListener("click", playRandomAudio);
+    document.getElementById("submitGuess").addEventListener("click", checkGuess);
+    document.getElementById("guessInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") checkGuess();
+    });
+    document.getElementById("revealButton").addEventListener("click", () => {
+      if (currentVideo) {
+        document.getElementById("feedback").innerText = "The song was: " + currentVideo.title;
+      }
+    });
+  </script>
+
+  <h5>Choose how long before guessing with the slider. You can press Enter to submit your guess, or click “Reveal” if you’re stuck.</h5>
+</body>
+</html>
